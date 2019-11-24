@@ -1,18 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
-#include <fcntl.h>
 #include <unistd.h>
 #include <string.h>
-#include <err.h>
 #include <errno.h>
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <regex.h>
 
-
-#define BUF_SIZE 4096
 
 void cpr(const char*, const char*, const char*);
 
@@ -44,20 +39,50 @@ int main(int argc, char * argv[]) {
     return 0;
 }
 
-//TODO oodaleet'
-int cp(char * path_in, char * path_out){
-    int fd_in = open(path_in, O_RDONLY);
-    if (fd_in == -1) return 1;
-    int fd_out = open(path_out, O_WRONLY | O_CREAT, 0666);
-    if (fd_out == -2) return 2;
-    char buf[BUF_SIZE];
-    int read_bytes = 0, wrote_bytes = 0;
-    while ((read_bytes = read(fd_in, &buf, sizeof(buf))) > 0){
-        wrote_bytes = write(fd_out, &buf, read_bytes);
-        if (wrote_bytes != read_bytes) return wrote_bytes - read_bytes;
+int cmp(const char * inpath, const char * topath) {
+    FILE * fp1 = fopen(inpath, "r");
+    if(fp1 == NULL) {
+        printf("Can't open %s\n", inpath);
+        return -1;
     }
-    close(fd_in);
-    close(fd_out);
+    FILE * fp2 = fopen(topath, "w");
+    if(fp2 == NULL) {
+        printf("Can't open %s\n", topath);
+        fclose(fp1);
+        return -1;
+    }
+    int c1, c2;
+    while((c1 = fgetc(fp1)) != EOF && (c2 = fgetc(fp2)) != EOF) {
+        if(c1 != c2)
+            break;
+    }
+    fclose(fp1);
+    fclose(fp2);
+    if(c1 != EOF || c2 != EOF) {
+        return 1;
+    }
+    return 0;
+}
+
+int cp(char * inpath, char * topath){
+    FILE * fp1 = fopen(inpath, "r");
+    if(fp1 == NULL) {
+        printf("Can't open %s\n", inpath);
+        return -1;
+    }
+    FILE * fp2 = fopen(topath, "w");
+    if(fp2 == NULL) {
+        printf("Can't open %s\n", topath);
+        fclose(fp1);
+        return -1;
+    }
+
+    int c;
+    while((c = fgetc(fp1)) != EOF) {
+        fputc(c, fp2);
+    }
+    fclose(fp1);
+    fclose(fp2);
     return 0;
 }
 
@@ -71,28 +96,69 @@ void cpr(const char * inpath, const char * topath, const char * cdir) {
 
 
     while((dirp = readdir(dp)) != NULL) {
-        if(dirp->d_type == DT_DIR) {
-            if(strcmp(dirp->d_name, ".") != -1 || strcmp(dirp->d_name, "..") != -1)
+        char * pt2 = malloc(strlen(inpath) + strlen(cdir) + 2);
+        strcpy(pt2, inpath);
+        strcat(pt2, "/");
+        strcat(pt2, dirp->d_name);
+        char * pt = malloc(strlen(topath) + strlen(dirp->d_name) + 2);
+        strcpy(pt, topath);
+        strcat(pt, "/");
+        strcat(pt, dirp->d_name);
+        if(dirp->d_type == 4) {
+            if(strcmp(dirp->d_name, ".") == 0 || strcmp(dirp->d_name, "..") == 0)
                 continue;
-            char * pt = malloc(strlen(topath) + strlen(dirp->d_name) + 1);
-            strcpy(pt, topath);
-            strcat(pt, dirp->d_name);
-            mkdir(pt, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
-            char * pt2 = malloc(strlen(inpath) + strlen(cdir) + 1);
-            strcpy(pt2, topath);
-            strcat(pt2, cdir);
+
+            if(mkdir(pt, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) != 0) {
+                if (errno != EEXIST)
+                    printf("Mda, %s\n", strerror(errno));
+            }
+
             cpr(pt2, pt, cdir);
         } else {
-            char * pt = malloc(strlen(topath) + strlen(dirp->d_name) + 2);
-            strcpy(pt, topath);
-            strcat(pt, "/");
-            strcat(pt, dirp->d_name);
-            char * pt2 = malloc(strlen(inpath) + strlen(dirp->d_name) + 2);
-            strcpy(pt2, inpath);
-            strcat(pt2, "/");
-            strcat(pt2, dirp->d_name);
-            cp(pt2, pt);
+            char * ptgz = malloc(strlen(pt) + 4);
+            strcpy(ptgz, pt);
+            strcat(ptgz, ".gz");
+            if(access(ptgz, F_OK)) {
+                pid_t pid = fork();
+
+                if(pid < 0) {
+                    puts("Fork failure (avtor dolbaeb)");
+                    return;
+                } else if (pid == 0) {
+                    if(cp(pt2, pt) == 0) {
+                        execlp("gzip", "gzip", pt, NULL);
+
+                    }
+                } else
+                    wait(NULL);
+            } else {
+                pid_t pid = fork();
+                if(pid < 0) {
+                    puts("Fork failure!");
+                    return;
+                } else if(pid == 0) {
+                    pid_t pid1 = fork();
+
+                    if(pid1 < 0) {
+                        puts("Fork failure (mda)");
+                        return;
+                    } else if (pid1 == 0) {
+                        execlp("gunzip", "gunzip", ptgz, NULL);
+
+                    } else {
+                        wait(NULL);
+                        if(cmp(pt, pt2)) {
+                            if (cp(pt2, pt) == 0) {
+                                execlp("gzip", "gzip", pt, NULL);
+                            }
+                        } else
+                            execlp("gzip", "gzip", pt, NULL);
+                    }
+                } else
+                    wait(NULL);
+            }
         }
     }
+    closedir(dp);
 
 }

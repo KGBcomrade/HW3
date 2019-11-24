@@ -6,7 +6,7 @@
 
 #IncludeRegexTransform: 
 
-/home/kgbcomrade/dzl/backup/backup.c
+/home/kgbcomrade/prg/HW3/backup/backup.c
 stdio.h
 -
 stdlib.h

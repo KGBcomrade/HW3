@@ -1,4 +1,4 @@
-# Install script for directory: /home/kgbcomrade/dzl/backup
+# Install script for directory: /home/kgbcomrade/prg/HW3/backup
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -45,5 +45,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "/home/kgbcomrade/dzl/backup/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "/home/kgbcomrade/prg/HW3/backup/cmake-build-debug/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

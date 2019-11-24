@@ -1,1 +1,1 @@
-/bin/gcc -g   CMakeFiles/backup.dir/backup.c.o  -o backup 
+/usr/bin/cc -g   CMakeFiles/backup.dir/backup.c.o  -o backup 
