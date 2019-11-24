@@ -1,0 +1,34 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/kgbcomrade/dzl/backup/backup.c
+stdio.h
+-
+stdlib.h
+-
+assert.h
+-
+fcntl.h
+-
+unistd.h
+-
+string.h
+-
+err.h
+-
+errno.h
+-
+dirent.h
+-
+sys/types.h
+-
+sys/stat.h
+-
+regex.h
+-
+

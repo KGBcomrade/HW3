@@ -1,0 +1,3 @@
+/home/kgbcomrade/dzl/backup/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/home/kgbcomrade/dzl/backup/cmake-build-debug/CMakeFiles/backup.dir
+/home/kgbcomrade/dzl/backup/cmake-build-debug/CMakeFiles/edit_cache.dir
