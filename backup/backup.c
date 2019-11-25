@@ -6,10 +6,12 @@
 #include <dirent.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <regex.h>
+#include <sys/wait.h>
+#include <fcntl.h>
+#include <stdint.h>
 
 
-void cpr(const char*, const char*, const char*);
+void cpr(const char*, const char*);
 
 int main(int argc, char * argv[]) {
 	if(argc != 3) {
@@ -19,74 +21,81 @@ int main(int argc, char * argv[]) {
 
 
 	mkdir(argv[2], S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH);
+    cpr(argv[1], argv[2]);
 
-
-    regex_t regex;
-
-    if(regcomp(&regex, "(\\/\\w+)$", REG_EXTENDED)) {
-        puts("Illegal regex");
-        exit(-1);
-    }
-
-    regmatch_t a;
-    if(regexec(&regex, argv[1], 1, &a, 0)) {
-        puts("Incorrect input format");
-        exit(-1);
-    }
-
-    cpr(argv[1], argv[2], &(argv[1][a.rm_so]));
+    while(wait(NULL) != -1);
 
     return 0;
 }
 
 int cmp(const char * inpath, const char * topath) {
-    FILE * fp1 = fopen(inpath, "r");
-    if(fp1 == NULL) {
+    int fp1 = open(inpath, O_RDONLY);
+    if(fp1 == -1) {
         printf("Can't open %s\n", inpath);
         return -1;
     }
-    FILE * fp2 = fopen(topath, "w");
-    if(fp2 == NULL) {
+    int fp2 = open(topath, O_WRONLY | O_CREAT);
+    if(fp2 == -1) {
         printf("Can't open %s\n", topath);
-        fclose(fp1);
+        close(fp1);
         return -1;
     }
-    int c1, c2;
-    while((c1 = fgetc(fp1)) != EOF && (c2 = fgetc(fp2)) != EOF) {
-        if(c1 != c2)
+    uint8_t * buf1 = calloc(4096, 1), * buf2 = calloc(4096, 1);
+    size_t read_bytes1, read_bytes2;
+    int diff = 0;
+    while ((read_bytes1 = read(fp1, buf1, 4096)) > 0 || (read_bytes2 = read(fp2, buf2, 4096)) > 0) {
+        if(read_bytes1 != read_bytes2) {
+            diff = 1;
             break;
+        }
+        if(memcmp(buf1, buf2, 4096) != 0) {
+            diff = 1;
+            break;
+        }
     }
-    fclose(fp1);
-    fclose(fp2);
-    if(c1 != EOF || c2 != EOF) {
-        return 1;
+    if(read_bytes1 == -1 || read_bytes2 == -1) {
+        printf("Error on reading %s\n", read_bytes1 == -1 ? topath : inpath);
+        diff = -1;
     }
-    return 0;
+    close(fp1);
+    close(fp2);
+    return diff;
 }
 
 int cp(char * inpath, char * topath){
-    FILE * fp1 = fopen(inpath, "r");
-    if(fp1 == NULL) {
+    int fp1 = open(inpath, O_RDONLY);
+    if(fp1 == -1) {
         printf("Can't open %s\n", inpath);
         return -1;
     }
-    FILE * fp2 = fopen(topath, "w");
-    if(fp2 == NULL) {
+    int fp2 = open(topath, O_WRONLY | O_CREAT, 0666);
+    if(fp2 == -1) {
         printf("Can't open %s\n", topath);
-        fclose(fp1);
+        close(fp1);
         return -1;
     }
 
-    int c;
-    while((c = fgetc(fp1)) != EOF) {
-        fputc(c, fp2);
+    uint8_t  * buf = calloc(4096, sizeof(uint8_t));
+    size_t read_size, wrote_size = 0;
+    while ((read_size = (read(fp1, buf, 4096))) > 0) {
+        wrote_size = write(fp2, buf, read_size);
+        if(wrote_size != read_size) {
+            printf("Error on copying %s to %s: read %zu bytes, wrote %zu\n", inpath, topath, read_size, wrote_size);
+            close(fp1);
+            close(fp2);
+            return (int)(wrote_size - read_size);
+        }
     }
-    fclose(fp1);
-    fclose(fp2);
+    close(fp1);
+    close(fp2);
+    if(read_size == -1)
+        printf("Error on reading %s\n", inpath);
+    else if(wrote_size == -1)
+        printf("Error on writing %s", topath);
     return 0;
 }
 
-void cpr(const char * inpath, const char * topath, const char * cdir) {
+void cpr(const char * inpath, const char * topath) {
     DIR * dp;
     struct dirent * dirp;
     if((dp = opendir(inpath)) == NULL) {
@@ -96,33 +105,38 @@ void cpr(const char * inpath, const char * topath, const char * cdir) {
 
 
     while((dirp = readdir(dp)) != NULL) {
-        char * pt2 = malloc(strlen(inpath) + strlen(cdir) + 2);
+        char pname[FILENAME_MAX];
+        strcpy(pname, dirp->d_name);
+        char pt2[FILENAME_MAX];
         strcpy(pt2, inpath);
         strcat(pt2, "/");
-        strcat(pt2, dirp->d_name);
-        char * pt = malloc(strlen(topath) + strlen(dirp->d_name) + 2);
+        strcat(pt2, pname);
+        char pt[FILENAME_MAX];
         strcpy(pt, topath);
         strcat(pt, "/");
-        strcat(pt, dirp->d_name);
+        strcat(pt, pname);
+
         if(dirp->d_type == 4) {
-            if(strcmp(dirp->d_name, ".") == 0 || strcmp(dirp->d_name, "..") == 0)
+            if(strcmp(pname, ".") == 0 || strcmp(dirp->d_name, "..") == 0)
                 continue;
 
             if(mkdir(pt, S_IRWXU | S_IRWXG | S_IROTH | S_IXOTH) != 0) {
                 if (errno != EEXIST)
-                    printf("Mda, %s\n", strerror(errno));
+                    printf("Unable to make dir: %s\n", strerror(errno));
             }
 
-            cpr(pt2, pt, cdir);
+            cpr(pt2, pt);
         } else {
-            char * ptgz = malloc(strlen(pt) + 4);
+            char ptgz[FILENAME_MAX];
+
             strcpy(ptgz, pt);
             strcat(ptgz, ".gz");
             if(access(ptgz, F_OK)) {
+
                 pid_t pid = fork();
 
                 if(pid < 0) {
-                    puts("Fork failure (avtor dolbaeb)");
+                    puts("Fork failure");
                     return;
                 } else if (pid == 0) {
                     if(cp(pt2, pt) == 0) {
@@ -140,7 +154,7 @@ void cpr(const char * inpath, const char * topath, const char * cdir) {
                     pid_t pid1 = fork();
 
                     if(pid1 < 0) {
-                        puts("Fork failure (mda)");
+                        puts("Second fork failure");
                         return;
                     } else if (pid1 == 0) {
                         execlp("gunzip", "gunzip", ptgz, NULL);
@@ -160,5 +174,6 @@ void cpr(const char * inpath, const char * topath, const char * cdir) {
         }
     }
     closedir(dp);
+
 
 }

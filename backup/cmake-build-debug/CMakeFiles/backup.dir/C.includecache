@@ -11,15 +11,9 @@ stdio.h
 -
 stdlib.h
 -
-assert.h
--
-fcntl.h
--
 unistd.h
 -
 string.h
--
-err.h
 -
 errno.h
 -
@@ -29,6 +23,10 @@ sys/types.h
 -
 sys/stat.h
 -
-regex.h
+sys/wait.h
+-
+fcntl.h
+-
+stdint.h
 -
 
